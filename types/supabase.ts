@@ -39,21 +39,27 @@ export type Database = {
           created_at: string
           discord_id: string | null
           id: number
+          last_played: number | null
           points: number
+          team: string | null
         }
         Insert: {
           address: string
           created_at?: string
           discord_id?: string | null
           id?: number
+          last_played?: number | null
           points?: number
+          team?: string | null
         }
         Update: {
           address?: string
           created_at?: string
           discord_id?: string | null
           id?: number
+          last_played?: number | null
           points?: number
+          team?: string | null
         }
         Relationships: []
       }
@@ -62,7 +68,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      sum_points_for_team: {
+        Args: {
+          team_name: string
+        }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never

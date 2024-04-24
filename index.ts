@@ -63,6 +63,10 @@ client.once("ready", async () => {
       name: "team",
       description: "Choose your team",
     });
+    await guild.commands.create({
+      name: "warstatus",
+      description: "Show war status",
+    });
   }
 });
 
@@ -151,6 +155,47 @@ client.on("interactionCreate", async (interaction) => {
     // Send the embed with the action row
     await interaction.reply({ embeds: [embed], components: [actionRow] });
   }
+
+  if (interaction.commandName === "warstatus") {
+    try {
+      const [bullasData, berasData] = await Promise.all([
+        supabase.rpc("sum_points_for_team", { team_name: "bullas" }),
+        supabase.rpc("sum_points_for_team", { team_name: "beras" }),
+      ]);
+
+      const bullas = bullasData.data ?? 0;
+      const beras = berasData.data ?? 0;
+
+      const embed = new EmbedBuilder()
+        .setTitle("🏆 War Status")
+        .setDescription(`The battle between the Bullas and Beras rages on!`)
+        .addFields(
+          {
+            name: "🐂 Bullas",
+            value: `Points: ${bullas}`,
+            inline: true,
+          },
+          {
+            name: "🐻 Beras",
+            value: `Points: ${beras}`,
+            inline: true,
+          }
+        )
+        .setColor("#FF0000");
+      // .setTimestamp()
+      // .setFooter({
+      //   text: "May the best team win!",
+      //   // iconURL: "https://i.imgur.com/AfFp7pu.png",
+      // });
+
+      await interaction.reply({ embeds: [embed] });
+    } catch (error) {
+      console.error("Error fetching war status:", error);
+      await interaction.reply(
+        "An error occurred while fetching the war status."
+      );
+    }
+  }
 });
 
 // Handle button interactions
@@ -179,6 +224,11 @@ client.on("interactionCreate", async (interaction) => {
     // Add the "Bull" role to the user
     await roles.add(bullRole);
 
+    const { data, error } = await supabase
+      .from("users")
+      .update({ team: "bullas" })
+      .eq("discord_id", member.user.id);
+
     await interaction.reply({
       content: "You have joined the Bullas team!",
       ephemeral: true,
@@ -191,6 +241,11 @@ client.on("interactionCreate", async (interaction) => {
 
     // Add the "Bear" role to the user
     await roles.add(bearRole);
+
+    const { data, error } = await supabase
+      .from("users")
+      .update({ team: "beras" })
+      .eq("discord_id", member.user.id);
 
     await interaction.reply({
       content: "You have joined the Beras team!",
