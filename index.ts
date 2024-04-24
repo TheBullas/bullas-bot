@@ -47,6 +47,10 @@ client.once("ready", async () => {
       name: "wankme",
       description: "Generate a UUID and pass Discord user ID to Vercel site",
     });
+    await guild.commands.create({
+      name: "honey",
+      description: "Check how much honey you have",
+    });
   }
 });
 
@@ -68,8 +72,26 @@ client.on("interactionCreate", async (interaction) => {
     } else {
       const vercelUrl = `http://localhost:3000/?token=${uuid}&discord=${userId}`;
       await interaction.reply(
-        `Click this link to link your Discord account: ${vercelUrl}`
+        `Click this link to link your Discord account to your address: ${vercelUrl} `
       );
+    }
+  }
+
+  if (interaction.commandName === "honey") {
+    const userId = interaction.user.id;
+    const uuid = v4();
+
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("discord_id", userId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching user:", error);
+      await interaction.reply("An error occurred while fetching the user.");
+    } else {
+      await interaction.reply(`User has ${data.points} honey. 🍯`);
     }
   }
 });
