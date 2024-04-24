@@ -70,7 +70,7 @@ client.on("interactionCreate", async (interaction) => {
       console.error("Error inserting token:", error);
       await interaction.reply("An error occurred while generating the token.");
     } else {
-      const vercelUrl = `http://localhost:3000/?token=${uuid}&discord=${userId}`;
+      const vercelUrl = `${process.env.VERCEL_URL}/?token=${uuid}&discord=${userId}`;
       await interaction.reply({
         content: `Click this link to link your Discord account to your address: ${vercelUrl} `,
         ephemeral: true,
