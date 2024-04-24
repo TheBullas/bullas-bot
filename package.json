@@ -5,6 +5,7 @@
   "type": "module",
   "description": "",
   "scripts": {
+    "dev": "nodemon --exec 'pnpm tsx index.ts'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -27,6 +28,7 @@
     "@types/uuid": "^9.0.8",
     "eslint": "^8.53.0",
     "eslint-config-ponder": "^0.2.2",
+    "nodemon": "^3.1.0",
     "ts-node": "^10.9.2",
     "tslib": "^2.6.2",
     "tsx": "^4.7.1",

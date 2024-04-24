@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import cors from "cors";
-import { Client, GatewayIntentBits } from "discord.js";
+import { Client, EmbedBuilder, GatewayIntentBits } from "discord.js";
 import express from "express";
 import http from "http";
 import { v4 } from "uuid";
@@ -66,13 +66,18 @@ client.on("interactionCreate", async (interaction) => {
       .insert({ token: uuid, discord_id: userId, used: false })
       .single();
 
+    const embed = new EmbedBuilder()
+      .setColor(0x0099ff)
+      .setTitle("Some title")
+      .setDescription("Some description");
+
     if (error) {
       console.error("Error inserting token:", error);
       await interaction.reply("An error occurred while generating the token.");
     } else {
       const vercelUrl = `${process.env.VERCEL_URL}/?token=${uuid}&discord=${userId}`;
       await interaction.reply({
-        content: `Click this link to link your Discord account to your address: ${vercelUrl} `,
+        content: `Hey ${interaction.user.username}, to link your Discord account to your address click this link: \n\n${vercelUrl} `,
         ephemeral: true,
       });
     }
@@ -92,7 +97,16 @@ client.on("interactionCreate", async (interaction) => {
       console.error("Error fetching user:", error);
       await interaction.reply("An error occurred while fetching the user.");
     } else {
-      await interaction.reply(`User has ${data.points} honey. 🍯`);
+      const honeyEmbed = new EmbedBuilder()
+        .setColor(0xffd700)
+        .setTitle(`${interaction.user.username}'s Honey`)
+        .setDescription(`You have ${data.points} honey. 🍯`)
+        .setThumbnail(interaction.user.displayAvatarURL())
+        .setTimestamp();
+
+      await interaction.reply({
+        embeds: [honeyEmbed],
+      });
     }
   }
 });
