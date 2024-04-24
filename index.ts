@@ -134,12 +134,12 @@ client.on("interactionCreate", async (interaction) => {
     // Create the buttons
     const bullButton = new ButtonBuilder()
       .setCustomId("bullButton")
-      .setLabel("🐂 Bulls")
+      .setLabel("🐂 Bullas")
       .setStyle(ButtonStyle.Primary);
 
     const bearButton = new ButtonBuilder()
       .setCustomId("bearButton")
-      .setLabel("🐻 Bears")
+      .setLabel("🐻 Beras")
       .setStyle(ButtonStyle.Primary);
 
     // Create the action row and add the buttons
@@ -180,7 +180,7 @@ client.on("interactionCreate", async (interaction) => {
     await roles.add(bullRole);
 
     await interaction.reply({
-      content: "You have joined the Bulls team!",
+      content: "You have joined the Bullas team!",
       ephemeral: true,
     });
   } else if (interaction.customId === "bearButton") {
@@ -193,7 +193,7 @@ client.on("interactionCreate", async (interaction) => {
     await roles.add(bearRole);
 
     await interaction.reply({
-      content: "You have joined the Bears team!",
+      content: "You have joined the Beras team!",
       ephemeral: true,
     });
   }
