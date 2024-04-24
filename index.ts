@@ -1,6 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import cors from "cors";
-import { Client, EmbedBuilder, GatewayIntentBits } from "discord.js";
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  Client,
+  EmbedBuilder,
+  GatewayIntentBits,
+  GuildMemberRoleManager,
+} from "discord.js";
 import express from "express";
 import http from "http";
 import { v4 } from "uuid";
@@ -50,6 +58,10 @@ client.once("ready", async () => {
     await guild.commands.create({
       name: "honey",
       description: "Check how much honey you have",
+    });
+    await guild.commands.create({
+      name: "team",
+      description: "Choose your team",
     });
   }
 });
@@ -108,6 +120,82 @@ client.on("interactionCreate", async (interaction) => {
         embeds: [honeyEmbed],
       });
     }
+  }
+
+  if (interaction.commandName === "team") {
+    // Create the embed
+    const embed = new EmbedBuilder()
+      .setTitle("Choose Your Team")
+      .setDescription(
+        "Are you a bull or a bear? Click the button to choose your team and get the corresponding role."
+      )
+      .setColor("#0099ff");
+
+    // Create the buttons
+    const bullButton = new ButtonBuilder()
+      .setCustomId("bullButton")
+      .setLabel("🐂 Bulls")
+      .setStyle(ButtonStyle.Primary);
+
+    const bearButton = new ButtonBuilder()
+      .setCustomId("bearButton")
+      .setLabel("🐻 Bears")
+      .setStyle(ButtonStyle.Primary);
+
+    // Create the action row and add the buttons
+    const actionRow = new ActionRowBuilder().addComponents(
+      bullButton,
+      bearButton
+    );
+
+    // Send the embed with the action row
+    await interaction.reply({ embeds: [embed], components: [actionRow] });
+  }
+});
+
+// Handle button interactions
+client.on("interactionCreate", async (interaction) => {
+  // Replace 'BULL_ROLE_ID' and 'BEAR_ROLE_ID' with the actual role IDs
+  const BULL_ROLE_ID = "1230207362145452103";
+  const BEAR_ROLE_ID = "1230207106896892006";
+  const member = interaction.member;
+
+  if (!interaction.isButton()) return;
+  if (!member || !interaction.guild) return;
+
+  const bullRole = interaction.guild.roles.cache.get(BULL_ROLE_ID);
+  const bearRole = interaction.guild.roles.cache.get(BEAR_ROLE_ID);
+
+  if (!bearRole || !bullRole) return;
+
+  const roles = member.roles as GuildMemberRoleManager;
+
+  if (interaction.customId === "bullButton") {
+    // Remove the "Bear" role if the user has it
+    if (roles.cache.has(BEAR_ROLE_ID)) {
+      await roles.remove(bearRole);
+    }
+
+    // Add the "Bull" role to the user
+    await roles.add(bullRole);
+
+    await interaction.reply({
+      content: "You have joined the Bulls team!",
+      ephemeral: true,
+    });
+  } else if (interaction.customId === "bearButton") {
+    // Remove the "Bull" role if the user has it
+    if (roles.cache.has(BULL_ROLE_ID)) {
+      await roles.remove(bullRole);
+    }
+
+    // Add the "Bear" role to the user
+    await roles.add(bearRole);
+
+    await interaction.reply({
+      content: "You have joined the Bears team!",
+      ephemeral: true,
+    });
   }
 });
 
