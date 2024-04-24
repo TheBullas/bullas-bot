@@ -41,7 +41,7 @@ const client = new Client({
 client.once("ready", async () => {
   console.log(`Logged in as ${client!.user!.tag}!`);
 
-  const guild = client.guilds.cache.get("1232478905328205865");
+  const guild = client.guilds.cache.get("1228994421966766141");
   if (guild) {
     await guild.commands.create({
       name: "wankme",
@@ -71,9 +71,10 @@ client.on("interactionCreate", async (interaction) => {
       await interaction.reply("An error occurred while generating the token.");
     } else {
       const vercelUrl = `http://localhost:3000/?token=${uuid}&discord=${userId}`;
-      await interaction.reply(
-        `Click this link to link your Discord account to your address: ${vercelUrl} `
-      );
+      await interaction.reply({
+        content: `Click this link to link your Discord account to your address: ${vercelUrl} `,
+        ephemeral: true,
+      });
     }
   }
 
