@@ -127,7 +127,7 @@ client.on("interactionCreate", async (interaction) => {
     const embed = new EmbedBuilder()
       .setTitle("Choose Your Team")
       .setDescription(
-        "Are you a bull or a bear? Click the button to choose your team and get the corresponding role."
+        "Are you a bulla or a bera? Click the button to choose your team and get the corresponding role."
       )
       .setColor("#0099ff");
 
