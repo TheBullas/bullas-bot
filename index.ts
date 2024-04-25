@@ -85,6 +85,7 @@ client.on("interactionCreate", async (interaction) => {
 
     if (userData) {
       await interaction.reply("You have already linked your account.");
+      return;
     }
 
     const { data, error } = await supabase
