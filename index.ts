@@ -77,6 +77,16 @@ client.on("interactionCreate", async (interaction) => {
     const userId = interaction.user.id;
     const uuid = v4();
 
+    const { data: userData } = await supabase
+      .from("users")
+      .select("*")
+      .eq("discord_id", userId)
+      .single();
+
+    if (userData) {
+      await interaction.reply("You have already linked your account.");
+    }
+
     const { data, error } = await supabase
       .from("tokens")
       .insert({ token: uuid, discord_id: userId, used: false })
