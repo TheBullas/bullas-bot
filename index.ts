@@ -67,11 +67,105 @@ client.once("ready", async () => {
       name: "warstatus",
       description: "Show war status",
     });
+    await guild.commands.create({
+      name: "transfer",
+      description: "Transfer honey to another user",
+      options: [
+        {
+          name: "user",
+          description: "The user to transfer honey to",
+          type: 6, // 6 represents the USER type
+          required: true,
+        },
+        {
+          name: "amount",
+          description: "The amount of honey to transfer",
+          type: 4, // 4 represents the INTEGER type
+          required: true,
+        },
+      ],
+    });
   }
 });
 
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
+
+  if (interaction.commandName === "transfer") {
+    const userId = interaction.user.id;
+    const targetUser = interaction.options.getUser("user");
+    const amount = interaction.options.get("amount")?.value as number;
+
+    if (!targetUser || !amount) {
+      await interaction.reply("Please provide a valid user and amount.");
+      return;
+    }
+
+    const { data: senderData, error: senderError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("discord_id", userId)
+      .single();
+
+    if (senderError || !senderData) {
+      console.error("Error fetching sender:", senderError);
+      await interaction.reply("An error occurred while fetching the sender.");
+      return;
+    }
+
+    if (senderData.points < amount) {
+      await interaction.reply("Insufficient points to transfer.");
+      return;
+    }
+
+    const { data: receiverData, error: receiverError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("discord_id", targetUser.id)
+      .single();
+
+    if (receiverError) {
+      console.error("Error fetching receiver:", receiverError);
+      await interaction.reply("An error occurred while fetching the receiver.");
+      return;
+    }
+
+    if (!receiverData) {
+      await interaction.reply("The specified user does not exist.");
+      return;
+    }
+
+    const { data: senderUpdateData, error: senderUpdateError } = await supabase
+      .from("users")
+      .update({ points: senderData.points - amount })
+      .eq("discord_id", userId);
+
+    if (senderUpdateError) {
+      console.error("Error updating sender points:", senderUpdateError);
+      await interaction.reply(
+        "An error occurred while updating sender points."
+      );
+      return;
+    }
+
+    const { data: receiverUpdateData, error: receiverUpdateError } =
+      await supabase
+        .from("users")
+        .update({ points: receiverData.points + amount })
+        .eq("discord_id", targetUser.id);
+
+    if (receiverUpdateError) {
+      console.error("Error updating receiver points:", receiverUpdateError);
+      await interaction.reply(
+        "An error occurred while updating receiver points."
+      );
+      return;
+    }
+
+    await interaction.reply(
+      `Successfully transferred ${amount} points to <@${targetUser.id}>.`
+    );
+  }
 
   if (interaction.commandName === "wankme") {
     const userId = interaction.user.id;
