@@ -85,6 +85,10 @@ client.once("ready", async () => {
         },
       ],
     });
+    await guild.commands.create({
+      name: "leaderboard",
+      description: "Show the leaderboard with top users and their points",
+    });
   }
 });
 
@@ -95,6 +99,27 @@ client.on("interactionCreate", async (interaction) => {
     const userId = interaction.user.id;
     const targetUser = interaction.options.getUser("user");
     const amount = interaction.options.get("amount")?.value as number;
+
+    // Define the allowed role IDs
+    const allowedRoleIds = [
+      "1230906668066406481",
+      "1230195803877019718",
+      "1230906465334853785",
+      "1234239721165815818",
+    ];
+
+    // Check if the user has any of the allowed roles
+    const hasAllowedRole = interaction.member?.roles.cache.some((role) =>
+      allowedRoleIds.includes(role.id)
+    );
+
+    if (!hasAllowedRole) {
+      await interaction.reply({
+        content: "You don't have permission to use this command.",
+        ephemeral: true,
+      });
+      return;
+    }
 
     if (!targetUser || !amount) {
       await interaction.reply("Please provide a valid user and amount.");
@@ -178,7 +203,9 @@ client.on("interactionCreate", async (interaction) => {
       .single();
 
     if (userData) {
-      await interaction.reply("You have already linked your account.");
+      await interaction.reply(
+        `You have already linked your account. Your linked account: \`${userData.address}\``
+      );
       return;
     }
 
@@ -194,7 +221,10 @@ client.on("interactionCreate", async (interaction) => {
 
     if (error) {
       console.error("Error inserting token:", error);
-      await interaction.reply("An error occurred while generating the token.");
+      await interaction.reply({
+        content: "An error occurred while generating the token.",
+        ephemeral: true,
+      });
     } else {
       const vercelUrl = `${process.env.VERCEL_URL}/?token=${uuid}&discord=${userId}`;
       await interaction.reply({
@@ -272,17 +302,17 @@ client.on("interactionCreate", async (interaction) => {
       const beras = berasData.data ?? 0;
 
       const embed = new EmbedBuilder()
-        .setTitle("🏆 War Status")
+        .setTitle("🏆 Honey War Status")
         .setDescription(`The battle between the Bullas and Beras rages on!`)
         .addFields(
           {
             name: "🐂 Bullas",
-            value: `Points: ${bullas}`,
+            value: `Honey (mL): ${bullas}`,
             inline: true,
           },
           {
             name: "🐻 Beras",
-            value: `Points: ${beras}`,
+            value: `Honey (mL): ${beras}`,
             inline: true,
           }
         )
@@ -298,6 +328,47 @@ client.on("interactionCreate", async (interaction) => {
       console.error("Error fetching war status:", error);
       await interaction.reply(
         "An error occurred while fetching the war status."
+      );
+    }
+  }
+
+  if (interaction.commandName === "leaderboard") {
+    try {
+      const { data: leaderboardData, error } = await supabase
+        .from("users")
+        .select("discord_id, points")
+        .order("points", { ascending: false })
+        .limit(10)
+        .not("discord_id", "is", null);
+
+      if (error) {
+        console.error("Error fetching leaderboard data:", error);
+        await interaction.reply(
+          "An error occurred while fetching the leaderboard data."
+        );
+        return;
+      }
+
+      const leaderboardEmbed = new EmbedBuilder()
+        .setTitle("🏆 Leaderboard")
+        .setColor("#FFD700");
+
+      for (const [index, entry] of leaderboardData.entries()) {
+        const user = await client.users.fetch(entry.discord_id);
+        const userMention = user ? `<@${user.id}>` : "Unknown User";
+
+        leaderboardEmbed.addFields({
+          name: `${index + 1}. ${user.username}`,
+          value: ` 🍯 ${entry.points} mL`,
+          inline: false,
+        });
+      }
+
+      await interaction.reply({ embeds: [leaderboardEmbed] });
+    } catch (error) {
+      console.error("Error handling leaderboard command:", error);
+      await interaction.reply(
+        "An error occurred while processing the leaderboard command."
       );
     }
   }
