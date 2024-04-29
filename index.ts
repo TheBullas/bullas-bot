@@ -226,7 +226,7 @@ client.on("interactionCreate", async (interaction) => {
         ephemeral: true,
       });
     } else {
-      const vercelUrl = `${process.env.VERCEL_URL}/?token=${uuid}&discord=${userId}`;
+      const vercelUrl = `${process.env.VERCEL_URL}/league?token=${uuid}&discord=${userId}`;
       await interaction.reply({
         content: `Hey ${interaction.user.username}, to link your Discord account to your address click this link: \n\n${vercelUrl} `,
         ephemeral: true,
