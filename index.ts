@@ -80,7 +80,7 @@ client.once("ready", async () => {
         {
           name: "amount",
           description: "The amount of honey to transfer",
-          type: 4, // 4 represents the INTEGER type
+          type: 10, // 10 represents the NUMBER type
           required: true,
         },
       ],
