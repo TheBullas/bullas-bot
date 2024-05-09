@@ -56,8 +56,8 @@ client.once("ready", async () => {
       description: "Generate a UUID and pass Discord user ID to Vercel site",
     });
     await guild.commands.create({
-      name: "honey",
-      description: "Check how much honey you have",
+      name: "moola",
+      description: "Check how much moola you have",
     });
     await guild.commands.create({
       name: "team",
@@ -69,17 +69,17 @@ client.once("ready", async () => {
     });
     await guild.commands.create({
       name: "transfer",
-      description: "Transfer honey to another user",
+      description: "Transfer moola to another user",
       options: [
         {
           name: "user",
-          description: "The user to transfer honey to",
+          description: "The user to transfer moola to",
           type: 6, // 6 represents the USER type
           required: true,
         },
         {
           name: "amount",
-          description: "The amount of honey to transfer",
+          description: "The amount of moola to transfer",
           type: 10, // 10 represents the NUMBER type
           required: true,
         },
@@ -234,7 +234,7 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  if (interaction.commandName === "honey") {
+  if (interaction.commandName === "moola") {
     const userId = interaction.user.id;
     const uuid = v4();
 
@@ -248,15 +248,15 @@ client.on("interactionCreate", async (interaction) => {
       console.error("Error fetching user:", error);
       await interaction.reply("An error occurred while fetching the user.");
     } else {
-      const honeyEmbed = new EmbedBuilder()
+      const moolaEmbed = new EmbedBuilder()
         .setColor(0xffd700)
-        .setTitle(`${interaction.user.username}'s Honey`)
-        .setDescription(`You have ${data.points} honey. 🍯`)
+        .setTitle(`${interaction.user.username}'s moola`)
+        .setDescription(`You have ${data.points} moola. 🍯`)
         .setThumbnail(interaction.user.displayAvatarURL())
         .setTimestamp();
 
       await interaction.reply({
-        embeds: [honeyEmbed],
+        embeds: [moolaEmbed],
       });
     }
   }
@@ -302,17 +302,17 @@ client.on("interactionCreate", async (interaction) => {
       const beras = berasData.data ?? 0;
 
       const embed = new EmbedBuilder()
-        .setTitle("🏆 Honey War Status")
+        .setTitle("🏆 Moola War Status")
         .setDescription(`The battle between the Bullas and Beras rages on!`)
         .addFields(
           {
             name: "🐂 Bullas",
-            value: `Honey (mL): ${bullas}`,
+            value: `moola (mL): ${bullas}`,
             inline: true,
           },
           {
             name: "🐻 Beras",
-            value: `Honey (mL): ${beras}`,
+            value: `moola (mL): ${beras}`,
             inline: true,
           }
         )
