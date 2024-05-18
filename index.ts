@@ -51,6 +51,14 @@ client.once("ready", async () => {
 
   const guild = client.guilds.cache.get("1228994421966766141");
   if (guild) {
+    const honeyCommand = guild.commands.cache.find(
+      (command) => command.name === "honey"
+    );
+    if (honeyCommand) {
+      await honeyCommand.delete();
+      console.log("Deleted /honey command");
+    }
+
     await guild.commands.create({
       name: "wankme",
       description: "Generate a UUID and pass Discord user ID to Vercel site",
@@ -409,6 +417,9 @@ client.on("interactionCreate", async (interaction) => {
       content: "You have joined the Bullas team!",
       ephemeral: true,
     });
+
+    // Delete the original message
+    await interaction.message.delete();
   } else if (interaction.customId === "bearButton") {
     // Remove the "Bull" role if the user has it
     if (roles.cache.has(BULL_ROLE_ID)) {
@@ -427,6 +438,9 @@ client.on("interactionCreate", async (interaction) => {
       content: "You have joined the Beras team!",
       ephemeral: true,
     });
+
+    // Delete the original message
+    await interaction.message.delete();
   }
 });
 
