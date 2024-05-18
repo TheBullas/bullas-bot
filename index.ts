@@ -51,11 +51,10 @@ client.once("ready", async () => {
 
   const guild = client.guilds.cache.get("1228994421966766141");
   if (guild) {
-    const honeyCommand = guild.commands.cache.find(
-      (command) => command.name === "honey"
-    );
+    const commands = await guild.commands.fetch();
+    const honeyCommand = commands.find((command) => command.name === "honey");
     if (honeyCommand) {
-      await honeyCommand.delete();
+      await guild.commands.delete(honeyCommand.id);
       console.log("Deleted /honey command");
     }
 
