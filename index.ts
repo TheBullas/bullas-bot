@@ -12,6 +12,7 @@ import {
 import express from "express";
 import http from "http";
 import { v4 } from "uuid";
+import Decimal from 'decimal.js';
 
 import "dotenv/config";
 import { Database } from "./types/supabase";
@@ -167,9 +168,16 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
+    const senderPoints = new Decimal(senderData.points);
+    const receiverPoints = new Decimal(receiverData.points);
+    const transferAmount = new Decimal(amount);
+
+    const updatedSenderPoints = senderPoints.minus(transferAmount);
+    const updatedReceiverPoints = receiverPoints.plus(transferAmount);
+
     const { data: senderUpdateData, error: senderUpdateError } = await supabase
       .from("users")
-      .update({ points: senderData.points - amount })
+      .update({ points: updatedSenderPoints.toNumber() })
       .eq("discord_id", userId);
 
     if (senderUpdateError) {
@@ -183,7 +191,7 @@ client.on("interactionCreate", async (interaction) => {
     const { data: receiverUpdateData, error: receiverUpdateError } =
       await supabase
         .from("users")
-        .update({ points: receiverData.points + amount })
+        .update({ points: updatedReceiverPoints.toNumber() })
         .eq("discord_id", targetUser.id);
 
     if (receiverUpdateError) {
