@@ -3,11 +3,13 @@ import cors from "cors";
 import Decimal from "decimal.js";
 import {
   ActionRowBuilder,
+  APIInteractionGuildMember,
   ButtonBuilder,
   ButtonStyle,
   Client,
   EmbedBuilder,
   GatewayIntentBits,
+  GuildMember,
   GuildMemberRoleManager,
 } from "discord.js";
 import express from "express";
@@ -50,6 +52,19 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
   ],
 });
+
+// Define permissioned roles
+const ADMIN_ROLE_IDS = [
+  "1230906668066406481",
+  "1230195803877019718",
+  "1230906465334853785",
+  "1234239721165815818",
+];
+
+// Helper function to check if user has admin role
+function hasAdminRole(member: GuildMember | APIInteractionGuildMember | null) {
+  return member?.roles.cache.some((role) => ADMIN_ROLE_IDS.includes(role.id));
+}
 
 client.once("ready", async () => {
   console.log(`Logged in as ${client!.user!.tag}!`);
@@ -106,6 +121,24 @@ client.once("ready", async () => {
       description:
         "Get a snapshot of the top 500 addresses from the winning team",
     });
+    await guild.commands.create({
+      name: "fine",
+      description: "Fine a user by removing points",
+      options: [
+        {
+          name: "user",
+          description: "The user to fine",
+          type: 6, // 6 represents the USER type
+          required: true,
+        },
+        {
+          name: "amount",
+          description: "The amount of points to remove",
+          type: 10, // 10 represents the NUMBER type
+          required: true,
+        },
+      ],
+    });
   }
 });
 
@@ -113,30 +146,17 @@ client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
 
   if (interaction.commandName === "transfer") {
-    const userId = interaction.user.id;
-    const targetUser = interaction.options.getUser("user");
-    const amount = interaction.options.get("amount")?.value as number;
-
-    // Define the allowed role IDs
-    const allowedRoleIds = [
-      "1230906668066406481",
-      "1230195803877019718",
-      "1230906465334853785",
-      "1234239721165815818",
-    ];
-
-    // Check if the user has any of the allowed roles
-    const hasAllowedRole = interaction.member?.roles.cache.some((role) =>
-      allowedRoleIds.includes(role.id)
-    );
-
-    if (!hasAllowedRole) {
+    if (!hasAdminRole(interaction.member)) {
       await interaction.reply({
         content: "You don't have permission to use this command.",
         ephemeral: true,
       });
       return;
     }
+
+    const userId = interaction.user.id;
+    const targetUser = interaction.options.getUser("user");
+    const amount = interaction.options.get("amount")?.value as number;
 
     if (!targetUser || !amount) {
       await interaction.reply("Please provide a valid user and amount.");
@@ -398,20 +418,7 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   if (interaction.commandName === "snapshot") {
-    // Define the allowed role IDs
-    const allowedRoleIds = [
-      "1230906668066406481",
-      "1230195803877019718",
-      "1230906465334853785",
-      "1234239721165815818",
-    ];
-
-    // Check if the user has any of the allowed roles
-    const hasAllowedRole = interaction.member?.roles.cache.some((role) =>
-      allowedRoleIds.includes(role.id)
-    );
-
-    if (!hasAllowedRole) {
+    if (!hasAdminRole(interaction.member)) {
       await interaction.reply({
         content: "You don't have permission to use this command.",
         ephemeral: true,
@@ -478,6 +485,61 @@ client.on("interactionCreate", async (interaction) => {
       await interaction.editReply(
         "An error occurred while processing the snapshot command."
       );
+    }
+  }
+
+  if (interaction.commandName === "fine") {
+    if (!hasAdminRole(interaction.member)) {
+      await interaction.reply({
+        content: "You don't have permission to use this command.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const targetUser = interaction.options.getUser("user");
+    const amount = interaction.options.get("amount")?.value as number;
+
+    if (!targetUser || !amount || amount <= 0) {
+      await interaction.reply("Please provide a valid user and a positive amount.");
+      return;
+    }
+
+    try {
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("discord_id", targetUser.id)
+        .single();
+
+      if (userError || !userData) {
+        await interaction.reply("User not found or an error occurred.");
+        return;
+      }
+
+      const currentPoints = new Decimal(userData.points);
+      const fineAmount = new Decimal(amount);
+
+      if (currentPoints.lessThan(fineAmount)) {
+        await interaction.reply("The user doesn't have enough points for this fine.");
+        return;
+      }
+
+      const updatedPoints = currentPoints.minus(fineAmount);
+
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({ points: updatedPoints.toNumber() })
+        .eq("discord_id", targetUser.id);
+
+      if (updateError) {
+        throw new Error("Failed to update user points");
+      }
+
+      await interaction.reply(`Successfully fined <@${targetUser.id}> ${amount} points. Their new balance is ${updatedPoints} points.`);
+    } catch (error) {
+      console.error("Error handling fine command:", error);
+      await interaction.reply("An error occurred while processing the fine command.");
     }
   }
 });
