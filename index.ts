@@ -15,6 +15,8 @@ import fs from "fs";
 import http from "http";
 import path from "path";
 import { v4 } from "uuid";
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 import "dotenv/config";
 import { Database } from "./types/supabase";
@@ -451,12 +453,16 @@ client.on("interactionCreate", async (interaction) => {
       const csvHeader = "address,points\n";
       const fullCsvContent = csvHeader + csvContent;
 
+      // Get the directory of the current module
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+
       // Write to a temporary file
-      const tempDir = path.join(__dirname, "temp");
+      const tempDir = join(__dirname, 'temp');
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir);
       }
-      const filePath = path.join(tempDir, `top_500_${winningTeam}.csv`);
+      const filePath = join(tempDir, `top_500_${winningTeam}.csv`);
       fs.writeFileSync(filePath, fullCsvContent);
 
       // Upload the file as an attachment
