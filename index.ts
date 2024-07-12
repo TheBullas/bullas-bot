@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import cors from "cors";
+import Decimal from "decimal.js";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -10,9 +11,10 @@ import {
   GuildMemberRoleManager,
 } from "discord.js";
 import express from "express";
+import fs from "fs";
 import http from "http";
+import path from "path";
 import { v4 } from "uuid";
-import Decimal from 'decimal.js';
 
 import "dotenv/config";
 import { Database } from "./types/supabase";
@@ -96,6 +98,11 @@ client.once("ready", async () => {
     await guild.commands.create({
       name: "leaderboard",
       description: "Show the leaderboard with top users and their points",
+    });
+    await guild.commands.create({
+      name: "snapshot",
+      description:
+        "Get a snapshot of the top 500 addresses from the winning team",
     });
   }
 });
@@ -384,6 +391,86 @@ client.on("interactionCreate", async (interaction) => {
       console.error("Error handling leaderboard command:", error);
       await interaction.reply(
         "An error occurred while processing the leaderboard command."
+      );
+    }
+  }
+
+  if (interaction.commandName === "snapshot") {
+    // Define the allowed role IDs
+    const allowedRoleIds = [
+      "1230906668066406481",
+      "1230195803877019718",
+      "1230906465334853785",
+      "1234239721165815818",
+    ];
+
+    // Check if the user has any of the allowed roles
+    const hasAllowedRole = interaction.member?.roles.cache.some((role) =>
+      allowedRoleIds.includes(role.id)
+    );
+
+    if (!hasAllowedRole) {
+      await interaction.reply({
+        content: "You don't have permission to use this command.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await interaction.deferReply(); // Defer the reply as this operation might take some time
+
+    try {
+      // Get the total points for each team
+      const [bullasData, berasData] = await Promise.all([
+        supabase.rpc("sum_points_for_team", { team_name: "bullas" }),
+        supabase.rpc("sum_points_for_team", { team_name: "beras" }),
+      ]);
+
+      const bullasPoints = bullasData.data ?? 0;
+      const berasPoints = berasData.data ?? 0;
+
+      // Determine the winning team
+      const winningTeam = bullasPoints > berasPoints ? "bullas" : "beras";
+
+      // Fetch top 500 addresses from the winning team
+      const { data: topAddresses, error } = await supabase
+        .from("users")
+        .select("address, points")
+        .eq("team", winningTeam)
+        .order("points", { ascending: false })
+        .limit(500);
+
+      if (error) {
+        throw new Error("Failed to fetch top addresses");
+      }
+
+      // Create CSV content
+      const csvContent = topAddresses
+        .map((user) => `${user.address},${user.points}`)
+        .join("\n");
+      const csvHeader = "address,points\n";
+      const fullCsvContent = csvHeader + csvContent;
+
+      // Write to a temporary file
+      const tempDir = path.join(__dirname, "temp");
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir);
+      }
+      const filePath = path.join(tempDir, `top_500_${winningTeam}.csv`);
+      fs.writeFileSync(filePath, fullCsvContent);
+
+      // Upload the file as an attachment
+      await interaction.editReply({
+        content: `Here's the snapshot of the top 500 addresses from the winning team (${winningTeam}):`,
+        files: [filePath],
+      });
+
+      // Delete the temporary file
+      fs.unlinkSync(filePath);
+    } catch (error) {
+      console.error("Error handling snapshot command:", error);
+      await interaction.editReply(
+        "An error occurred while processing the snapshot command."
       );
     }
   }
