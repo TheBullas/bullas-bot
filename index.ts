@@ -12,6 +12,7 @@ import {
   GuildMember,
   GuildMemberRoleManager,
 } from "discord.js";
+import "dotenv/config";
 import express from "express";
 import fs from "fs";
 import http from "http";
@@ -19,7 +20,6 @@ import { scheduleJob } from "node-schedule";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { v4 } from "uuid";
-import "dotenv/config";
 import { Database } from "./types/supabase";
 
 let projects: string[] = [];
@@ -66,9 +66,9 @@ function hasAdminRole(member: GuildMember | APIInteractionGuildMember | null) {
 }
 
 // New constants for role management
-const WHITELIST_ROLE_ID = "YOUR_WHITELIST_ROLE_ID";
-const MOOLALIST_ROLE_ID = "YOUR_MOOLALIST_ROLE_ID";
-const FREE_MINT_ROLE_ID = "YOUR_FREE_MINT_ROLE_ID";
+const WHITELIST_ROLE_ID = "1263470313300295751";
+const MOOLALIST_ROLE_ID = "1263470568536014870";
+const FREE_MINT_ROLE_ID = "1263470790314164325";
 
 let WHITELIST_MINIMUM = 100; // Initial minimum, can be updated
 
