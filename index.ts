@@ -15,11 +15,10 @@ import {
 import express from "express";
 import fs from "fs";
 import http from "http";
-import path from "path";
+import { scheduleJob } from "node-schedule";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { v4 } from "uuid";
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
 import "dotenv/config";
 import { Database } from "./types/supabase";
 
@@ -65,6 +64,124 @@ const ADMIN_ROLE_IDS = [
 function hasAdminRole(member: GuildMember | APIInteractionGuildMember | null) {
   return member?.roles.cache.some((role) => ADMIN_ROLE_IDS.includes(role.id));
 }
+
+// New constants for role management
+const WHITELIST_ROLE_ID = "YOUR_WHITELIST_ROLE_ID";
+const MOOLALIST_ROLE_ID = "YOUR_MOOLALIST_ROLE_ID";
+const FREE_MINT_ROLE_ID = "YOUR_FREE_MINT_ROLE_ID";
+
+let WHITELIST_MINIMUM = 100; // Initial minimum, can be updated
+
+// New function to get team points
+async function getTeamPoints() {
+  const [bullasData, berasData] = await Promise.all([
+    supabase.rpc("sum_points_for_team", { team_name: "bullas" }),
+    supabase.rpc("sum_points_for_team", { team_name: "beras" }),
+  ]);
+
+  return {
+    bullas: bullasData.data ?? 0,
+    beras: berasData.data ?? 0,
+  };
+}
+
+// New function to get top players
+async function getTopPlayers(team: string, limit: number) {
+  const { data, error } = await supabase
+    .from("users")
+    .select("discord_id, address, points")
+    .eq("team", team)
+    .order("points", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data;
+}
+
+// New function to create CSV content
+function createCSV(data: any[], includeDiscordId: boolean = false) {
+  const header = includeDiscordId
+    ? "discord_id,address,points\n"
+    : "address,points\n";
+  const content = data
+    .map((user) =>
+      includeDiscordId
+        ? `${user.discord_id},${user.address},${user.points}`
+        : `${user.address},${user.points}`
+    )
+    .join("\n");
+  return header + content;
+}
+
+// New function to save CSV file
+async function saveCSV(content: string, filename: string) {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const tempDir = join(__dirname, "temp");
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir);
+  }
+  const filePath = join(tempDir, filename);
+  fs.writeFileSync(filePath, content);
+  return filePath;
+}
+
+// New function to update roles
+async function updateRoles(guild: any) {
+  const teamPoints = await getTeamPoints();
+  const winningTeam = teamPoints.bullas > teamPoints.beras ? "bullas" : "beras";
+  const losingTeam = winningTeam === "bullas" ? "beras" : "bullas";
+
+  const winningTopPlayers = await getTopPlayers(winningTeam, 2000);
+  const losingTopPlayers = await getTopPlayers(losingTeam, 700);
+
+  const whitelistRole = guild.roles.cache.get(WHITELIST_ROLE_ID);
+  const moolalistRole = guild.roles.cache.get(MOOLALIST_ROLE_ID);
+  const freeMintRole = guild.roles.cache.get(FREE_MINT_ROLE_ID);
+
+  const allPlayers = [...winningTopPlayers, ...losingTopPlayers];
+
+  for (const player of allPlayers) {
+    const member = await guild.members.fetch(player.discord_id);
+    if (!member) continue;
+
+    // Whitelist role
+    if (player.points >= WHITELIST_MINIMUM) {
+      await member.roles.add(whitelistRole);
+    } else {
+      await member.roles.remove(whitelistRole);
+    }
+
+    // Moolalist role
+    if (
+      (winningTeam === "bullas" && winningTopPlayers.includes(player)) ||
+      (winningTeam === "beras" && losingTopPlayers.includes(player))
+    ) {
+      await member.roles.add(moolalistRole);
+    } else {
+      await member.roles.remove(moolalistRole);
+    }
+
+    // Free Mint role
+    if (
+      (winningTeam === "bullas" && winningTopPlayers.indexOf(player) < 369) ||
+      (winningTeam === "beras" && losingTopPlayers.indexOf(player) < 169)
+    ) {
+      await member.roles.add(freeMintRole);
+    } else {
+      await member.roles.remove(freeMintRole);
+    }
+  }
+}
+
+// Schedule role updates
+scheduleJob("0 */6 * * *", async () => {
+  const guild = client.guilds.cache.get("YOUR_GUILD_ID");
+  if (guild) {
+    await updateRoles(guild);
+    console.log("Roles updated");
+  }
+});
 
 client.once("ready", async () => {
   console.log(`Logged in as ${client!.user!.tag}!`);
@@ -135,6 +252,18 @@ client.once("ready", async () => {
           name: "amount",
           description: "The amount of points to remove",
           type: 10, // 10 represents the NUMBER type
+          required: true,
+        },
+      ],
+    });
+    await guild.commands.create({
+      name: "updatewhitelistminimum",
+      description: "Update the minimum MOOLA required for the whitelist role",
+      options: [
+        {
+          name: "minimum",
+          description: "The new minimum MOOLA required",
+          type: 4, // INTEGER type
           required: true,
         },
       ],
@@ -426,60 +555,45 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
-    await interaction.deferReply(); // Defer the reply as this operation might take some time
+    await interaction.deferReply();
 
     try {
-      // Get the total points for each team
-      const [bullasData, berasData] = await Promise.all([
-        supabase.rpc("sum_points_for_team", { team_name: "bullas" }),
-        supabase.rpc("sum_points_for_team", { team_name: "beras" }),
-      ]);
+      const teamPoints = await getTeamPoints();
+      const winningTeam =
+        teamPoints.bullas > teamPoints.beras ? "bullas" : "beras";
+      const losingTeam = winningTeam === "bullas" ? "beras" : "bullas";
 
-      const bullasPoints = bullasData.data ?? 0;
-      const berasPoints = berasData.data ?? 0;
+      const winningTopPlayers = await getTopPlayers(winningTeam, 2000);
+      const losingTopPlayers = await getTopPlayers(losingTeam, 700);
+      const allPlayers = await getTopPlayers(
+        winningTeam,
+        Number.MAX_SAFE_INTEGER
+      );
+      allPlayers.push(
+        ...(await getTopPlayers(losingTeam, Number.MAX_SAFE_INTEGER))
+      );
+      allPlayers.sort((a, b) => b.points - a.points);
 
-      // Determine the winning team
-      const winningTeam = bullasPoints > berasPoints ? "bullas" : "beras";
+      const winningCSV = createCSV(winningTopPlayers);
+      const losingCSV = createCSV(losingTopPlayers);
+      const allCSV = createCSV(allPlayers, true);
 
-      // Fetch top 500 addresses from the winning team
-      const { data: topAddresses, error } = await supabase
-        .from("users")
-        .select("address, points")
-        .eq("team", winningTeam)
-        .order("points", { ascending: false })
-        .limit(500);
+      const winningFile = await saveCSV(
+        winningCSV,
+        `top_2000_${winningTeam}.csv`
+      );
+      const losingFile = await saveCSV(losingCSV, `top_700_${losingTeam}.csv`);
+      const allFile = await saveCSV(allCSV, `all_players.csv`);
 
-      if (error) {
-        throw new Error("Failed to fetch top addresses");
-      }
-
-      // Create CSV content
-      const csvContent = topAddresses
-        .map((user) => `${user.address},${user.points}`)
-        .join("\n");
-      const csvHeader = "address,points\n";
-      const fullCsvContent = csvHeader + csvContent;
-
-      // Get the directory of the current module
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-
-      // Write to a temporary file
-      const tempDir = join(__dirname, 'temp');
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir);
-      }
-      const filePath = join(tempDir, `top_500_${winningTeam}.csv`);
-      fs.writeFileSync(filePath, fullCsvContent);
-
-      // Upload the file as an attachment
       await interaction.editReply({
-        content: `Here's the snapshot of the top 500 addresses from the winning team (${winningTeam}):`,
-        files: [filePath],
+        content: `Here are the snapshot files:`,
+        files: [winningFile, losingFile, allFile],
       });
 
-      // Delete the temporary file
-      fs.unlinkSync(filePath);
+      // Delete temporary files
+      fs.unlinkSync(winningFile);
+      fs.unlinkSync(losingFile);
+      fs.unlinkSync(allFile);
     } catch (error) {
       console.error("Error handling snapshot command:", error);
       await interaction.editReply(
@@ -501,7 +615,9 @@ client.on("interactionCreate", async (interaction) => {
     const amount = interaction.options.get("amount")?.value as number;
 
     if (!targetUser || !amount || amount <= 0) {
-      await interaction.reply("Please provide a valid user and a positive amount.");
+      await interaction.reply(
+        "Please provide a valid user and a positive amount."
+      );
       return;
     }
 
@@ -521,7 +637,9 @@ client.on("interactionCreate", async (interaction) => {
       const fineAmount = new Decimal(amount);
 
       if (currentPoints.lessThan(fineAmount)) {
-        await interaction.reply("The user doesn't have enough points for this fine.");
+        await interaction.reply(
+          "The user doesn't have enough points for this fine."
+        );
         return;
       }
 
@@ -536,10 +654,46 @@ client.on("interactionCreate", async (interaction) => {
         throw new Error("Failed to update user points");
       }
 
-      await interaction.reply(`Successfully fined <@${targetUser.id}> ${amount} points. Their new balance is ${updatedPoints} points.`);
+      await interaction.reply(
+        `Successfully fined <@${targetUser.id}> ${amount} points. Their new balance is ${updatedPoints} points.`
+      );
     } catch (error) {
       console.error("Error handling fine command:", error);
-      await interaction.reply("An error occurred while processing the fine command.");
+      await interaction.reply(
+        "An error occurred while processing the fine command."
+      );
+    }
+  }
+
+  if (interaction.commandName === "updatewhitelistminimum") {
+    if (!hasAdminRole(interaction.member)) {
+      await interaction.reply({
+        content: "You don't have permission to use this command.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const newMinimum = interaction.options.get("minimum")?.value as number;
+    if (!newMinimum || newMinimum <= 0) {
+      await interaction.reply(
+        "Please provide a valid positive integer for the new minimum."
+      );
+      return;
+    }
+
+    WHITELIST_MINIMUM = newMinimum;
+    await interaction.reply(
+      `Whitelist minimum updated to ${WHITELIST_MINIMUM} MOOLA.`
+    );
+
+    // Trigger an immediate role update
+    const guild = interaction.guild;
+    if (guild) {
+      await updateRoles(guild);
+      await interaction.followUp(
+        "Roles have been updated based on the new minimum."
+      );
     }
   }
 });
