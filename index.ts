@@ -9,10 +9,13 @@ import {
   Client,
   EmbedBuilder,
   GatewayIntentBits,
+  Guild,
   GuildMember,
   GuildMemberRoleManager,
-  Guild,
+  REST,
   Role,
+  Routes,
+  SlashCommandBuilder,
 } from "discord.js";
 import "dotenv/config";
 import express from "express";
@@ -51,6 +54,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
@@ -64,8 +68,10 @@ const ADMIN_ROLE_IDS = [
 
 // Helper function to check if user has admin role
 function hasAdminRole(member: GuildMember | APIInteractionGuildMember | null) {
-  if (member && 'roles' in member) {
-    return member.roles.cache.some((role: Role) => ADMIN_ROLE_IDS.includes(role.id));
+  if (member && "roles" in member) {
+    return member.roles.cache.some((role: Role) =>
+      ADMIN_ROLE_IDS.includes(role.id)
+    );
   }
   return false;
 }
@@ -155,7 +161,10 @@ async function updateRoles(guild: Guild) {
 
   for (const player of allPlayers) {
     try {
-      const member = await guild.members.fetch({ user: player.discord_id, force: true });
+      const member = await guild.members.fetch({
+        user: player.discord_id,
+        force: true,
+      });
       if (!member) {
         console.log(`Member not found for Discord ID: ${player.discord_id}`);
         continue;
@@ -165,7 +174,10 @@ async function updateRoles(guild: Guild) {
       await member.roles.add(whitelistRole);
       console.log(`Added Whitelist role to user: ${player.discord_id}`);
     } catch (error) {
-      console.error(`Error updating roles for user ${player.discord_id}:`, error);
+      console.error(
+        `Error updating roles for user ${player.discord_id}:`,
+        error
+      );
     }
   }
 
@@ -181,6 +193,87 @@ const roleUpdateJob = scheduleJob("0 */6 * * *", async () => {
     console.log("Scheduled role update completed");
   } else {
     console.error("Guild not found for scheduled role update");
+  }
+});
+
+// Define your commands
+const commands = [
+  new SlashCommandBuilder()
+    .setName("updateroles")
+    .setDescription("Manually update roles"),
+  new SlashCommandBuilder()
+    .setName("transfer")
+    .setDescription("Transfer points to another user")
+    .addUserOption((option) =>
+      option
+        .setName("user")
+        .setDescription("The user to transfer points to")
+        .setRequired(true)
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("amount")
+        .setDescription("The amount of points to transfer")
+        .setRequired(true)
+    ),
+  new SlashCommandBuilder()
+    .setName("wankme")
+    .setDescription("Link your Discord account to your address"),
+  new SlashCommandBuilder()
+    .setName("moola")
+    .setDescription("Check your moola balance"),
+  new SlashCommandBuilder().setName("team").setDescription("Choose your team"),
+  new SlashCommandBuilder()
+    .setName("warstatus")
+    .setDescription("Check the current war status"),
+  new SlashCommandBuilder()
+    .setName("leaderboard")
+    .setDescription("View the leaderboard"),
+  new SlashCommandBuilder()
+    .setName("snapshot")
+    .setDescription("Take a snapshot of the current standings"),
+  new SlashCommandBuilder()
+    .setName("fine")
+    .setDescription("Fine a user")
+    .addUserOption((option) =>
+      option
+        .setName("user")
+        .setDescription("The user to fine")
+        .setRequired(true)
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("amount")
+        .setDescription("The amount to fine")
+        .setRequired(true)
+    ),
+  new SlashCommandBuilder()
+    .setName("updatewhitelistminimum")
+    .setDescription("Update the whitelist minimum")
+    .addIntegerOption((option) =>
+      option
+        .setName("minimum")
+        .setDescription("The new minimum value")
+        .setRequired(true)
+    ),
+];
+
+client.once("ready", async () => {
+  console.log("Bot is ready!");
+
+  // Register slash commands
+  const rest = new REST({ version: "10" }).setToken(discordBotToken!);
+
+  try {
+    console.log("Started refreshing application (/) commands.");
+
+    await rest.put(Routes.applicationCommands(client.user!.id), {
+      body: commands,
+    });
+
+    console.log("Successfully reloaded application (/) commands.");
+  } catch (error) {
+    console.error("Error refreshing application (/) commands:", error);
   }
 });
 
@@ -394,7 +487,10 @@ client.on("interactionCreate", async (interaction) => {
     );
 
     // Send the embed with the action row
-    await interaction.reply({ embeds: [embed], components: [actionRow as any] });
+    await interaction.reply({
+      embeds: [embed],
+      components: [actionRow as any],
+    });
   }
 
   if (interaction.commandName === "warstatus") {
