@@ -11,6 +11,7 @@ import {
   GatewayIntentBits,
   GuildMember,
   GuildMemberRoleManager,
+  Guild,
 } from "discord.js";
 import "dotenv/config";
 import express from "express";
@@ -126,11 +127,14 @@ async function saveCSV(content: string, filename: string) {
   return filePath;
 }
 
-// New function to update roles
-async function updateRoles(guild: any) {
+// Improve the updateRoles function
+async function updateRoles(guild: Guild) {
+  console.log("Starting role update process...");
   const teamPoints = await getTeamPoints();
   const winningTeam = teamPoints.bullas > teamPoints.beras ? "bullas" : "beras";
   const losingTeam = winningTeam === "bullas" ? "beras" : "bullas";
+
+  console.log(`Winning team: ${winningTeam}`);
 
   const winningTopPlayers = await getTopPlayers(winningTeam, 2000);
   const losingTopPlayers = await getTopPlayers(losingTeam, 700);
@@ -139,140 +143,92 @@ async function updateRoles(guild: any) {
   const moolalistRole = guild.roles.cache.get(MOOLALIST_ROLE_ID);
   const freeMintRole = guild.roles.cache.get(FREE_MINT_ROLE_ID);
 
+  if (!whitelistRole || !moolalistRole || !freeMintRole) {
+    console.error("One or more roles not found. Aborting role update.");
+    return;
+  }
+
   const allPlayers = [...winningTopPlayers, ...losingTopPlayers];
+  console.log(`Updating roles for ${allPlayers.length} players...`);
 
   for (const player of allPlayers) {
-    const member = await guild.members.fetch(player.discord_id);
-    if (!member) continue;
+    try {
+      const member = await guild.members.fetch(player.discord_id);
+      if (!member) {
+        console.log(`Member not found for Discord ID: ${player.discord_id}`);
+        continue;
+      }
 
-    // Whitelist role
-    if (player.points >= WHITELIST_MINIMUM) {
-      await member.roles.add(whitelistRole);
-    } else {
-      await member.roles.remove(whitelistRole);
-    }
+      // Whitelist role
+      if (player.points >= WHITELIST_MINIMUM) {
+        await member.roles.add(whitelistRole);
+      } else {
+        await member.roles.remove(whitelistRole);
+      }
 
-    // Moolalist role
-    if (
-      (winningTeam === "bullas" && winningTopPlayers.includes(player)) ||
-      (winningTeam === "beras" && losingTopPlayers.includes(player))
-    ) {
-      await member.roles.add(moolalistRole);
-    } else {
-      await member.roles.remove(moolalistRole);
-    }
+      // Moolalist role
+      if (
+        (winningTeam === "bullas" && winningTopPlayers.includes(player)) ||
+        (winningTeam === "beras" && losingTopPlayers.includes(player))
+      ) {
+        await member.roles.add(moolalistRole);
+      } else {
+        await member.roles.remove(moolalistRole);
+      }
 
-    // Free Mint role
-    if (
-      (winningTeam === "bullas" && winningTopPlayers.indexOf(player) < 369) ||
-      (winningTeam === "beras" && losingTopPlayers.indexOf(player) < 169)
-    ) {
-      await member.roles.add(freeMintRole);
-    } else {
-      await member.roles.remove(freeMintRole);
+      // Free Mint role
+      if (
+        (winningTeam === "bullas" && winningTopPlayers.indexOf(player) < 369) ||
+        (winningTeam === "beras" && losingTopPlayers.indexOf(player) < 169)
+      ) {
+        await member.roles.add(freeMintRole);
+      } else {
+        await member.roles.remove(freeMintRole);
+      }
+
+      console.log(`Updated roles for user: ${player.discord_id}`);
+    } catch (error) {
+      console.error(`Error updating roles for user ${player.discord_id}:`, error);
     }
   }
+
+  console.log("Role update process completed.");
 }
 
-// Schedule role updates
-scheduleJob("0 */6 * * *", async () => {
-  const guild = client.guilds.cache.get("YOUR_GUILD_ID");
+// Improve the cron job scheduling
+const roleUpdateJob = scheduleJob("0 */6 * * *", async () => {
+  console.log("Running scheduled role update job...");
+  const guild = client.guilds.cache.get("1228994421966766141"); // Replace with your actual guild ID
   if (guild) {
     await updateRoles(guild);
-    console.log("Roles updated");
+    console.log("Scheduled role update completed");
+  } else {
+    console.error("Guild not found for scheduled role update");
   }
 });
 
-client.once("ready", async () => {
-  console.log(`Logged in as ${client!.user!.tag}!`);
-
-  const guild = client.guilds.cache.get("1228994421966766141");
-  if (guild) {
-    const commands = await guild.commands.fetch();
-    const honeyCommand = commands.find((command) => command.name === "honey");
-    if (honeyCommand) {
-      await guild.commands.delete(honeyCommand.id);
-      console.log("Deleted /honey command");
-    }
-
-    await guild.commands.create({
-      name: "wankme",
-      description: "Generate a UUID and pass Discord user ID to Vercel site",
-    });
-    await guild.commands.create({
-      name: "moola",
-      description: "Check how much moola you have",
-    });
-    await guild.commands.create({
-      name: "team",
-      description: "Choose your team",
-    });
-    await guild.commands.create({
-      name: "warstatus",
-      description: "Show war status",
-    });
-    await guild.commands.create({
-      name: "transfer",
-      description: "Transfer moola to another user",
-      options: [
-        {
-          name: "user",
-          description: "The user to transfer moola to",
-          type: 6, // 6 represents the USER type
-          required: true,
-        },
-        {
-          name: "amount",
-          description: "The amount of moola to transfer",
-          type: 10, // 10 represents the NUMBER type
-          required: true,
-        },
-      ],
-    });
-    await guild.commands.create({
-      name: "leaderboard",
-      description: "Show the leaderboard with top users and their points",
-    });
-    await guild.commands.create({
-      name: "snapshot",
-      description:
-        "Get a snapshot of the top 500 addresses from the winning team",
-    });
-    await guild.commands.create({
-      name: "fine",
-      description: "Fine a user by removing points",
-      options: [
-        {
-          name: "user",
-          description: "The user to fine",
-          type: 6, // 6 represents the USER type
-          required: true,
-        },
-        {
-          name: "amount",
-          description: "The amount of points to remove",
-          type: 10, // 10 represents the NUMBER type
-          required: true,
-        },
-      ],
-    });
-    await guild.commands.create({
-      name: "updatewhitelistminimum",
-      description: "Update the minimum MOOLA required for the whitelist role",
-      options: [
-        {
-          name: "minimum",
-          description: "The new minimum MOOLA required",
-          type: 4, // INTEGER type
-          required: true,
-        },
-      ],
-    });
-  }
-});
-
+// Add a manual trigger for role updates (for testing)
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
+
+  if (interaction.commandName === "updateroles") {
+    if (!hasAdminRole(interaction.member)) {
+      await interaction.reply({
+        content: "You don't have permission to use this command.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await interaction.deferReply();
+    const guild = interaction.guild;
+    if (guild) {
+      await updateRoles(guild);
+      await interaction.editReply("Roles have been manually updated.");
+    } else {
+      await interaction.editReply("Failed to update roles: Guild not found.");
+    }
+  }
 
   if (interaction.commandName === "transfer") {
     if (!hasAdminRole(interaction.member)) {
