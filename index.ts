@@ -12,6 +12,7 @@ import {
   GuildMember,
   GuildMemberRoleManager,
   Guild,
+  Role,
 } from "discord.js";
 import "dotenv/config";
 import express from "express";
@@ -63,7 +64,10 @@ const ADMIN_ROLE_IDS = [
 
 // Helper function to check if user has admin role
 function hasAdminRole(member: GuildMember | APIInteractionGuildMember | null) {
-  return member?.roles.cache.some((role) => ADMIN_ROLE_IDS.includes(role.id));
+  if (member && 'roles' in member) {
+    return member.roles.cache.some((role: Role) => ADMIN_ROLE_IDS.includes(role.id));
+  }
+  return false;
 }
 
 // New constants for role management
@@ -130,63 +134,36 @@ async function saveCSV(content: string, filename: string) {
 // Improve the updateRoles function
 async function updateRoles(guild: Guild) {
   console.log("Starting role update process...");
-  const teamPoints = await getTeamPoints();
-  const winningTeam = teamPoints.bullas > teamPoints.beras ? "bullas" : "beras";
-  const losingTeam = winningTeam === "bullas" ? "beras" : "bullas";
-
-  console.log(`Winning team: ${winningTeam}`);
-
-  const winningTopPlayers = await getTopPlayers(winningTeam, 2000);
-  const losingTopPlayers = await getTopPlayers(losingTeam, 700);
-
   const whitelistRole = guild.roles.cache.get(WHITELIST_ROLE_ID);
-  const moolalistRole = guild.roles.cache.get(MOOLALIST_ROLE_ID);
-  const freeMintRole = guild.roles.cache.get(FREE_MINT_ROLE_ID);
 
-  if (!whitelistRole || !moolalistRole || !freeMintRole) {
-    console.error("One or more roles not found. Aborting role update.");
+  if (!whitelistRole) {
+    console.error("Whitelist role not found. Aborting role update.");
     return;
   }
 
-  const allPlayers = [...winningTopPlayers, ...losingTopPlayers];
-  console.log(`Updating roles for ${allPlayers.length} players...`);
+  const { data: allPlayers, error } = await supabase
+    .from("users")
+    .select("discord_id, points")
+    .gte("points", WHITELIST_MINIMUM);
+
+  if (error) {
+    console.error("Error fetching eligible players:", error);
+    return;
+  }
+
+  console.log(`Updating roles for ${allPlayers.length} eligible players...`);
 
   for (const player of allPlayers) {
     try {
-      const member = await guild.members.fetch(player.discord_id);
+      const member = await guild.members.fetch({ user: player.discord_id, force: true });
       if (!member) {
         console.log(`Member not found for Discord ID: ${player.discord_id}`);
         continue;
       }
 
       // Whitelist role
-      if (player.points >= WHITELIST_MINIMUM) {
-        await member.roles.add(whitelistRole);
-      } else {
-        await member.roles.remove(whitelistRole);
-      }
-
-      // Moolalist role
-      if (
-        (winningTeam === "bullas" && winningTopPlayers.includes(player)) ||
-        (winningTeam === "beras" && losingTopPlayers.includes(player))
-      ) {
-        await member.roles.add(moolalistRole);
-      } else {
-        await member.roles.remove(moolalistRole);
-      }
-
-      // Free Mint role
-      if (
-        (winningTeam === "bullas" && winningTopPlayers.indexOf(player) < 369) ||
-        (winningTeam === "beras" && losingTopPlayers.indexOf(player) < 169)
-      ) {
-        await member.roles.add(freeMintRole);
-      } else {
-        await member.roles.remove(freeMintRole);
-      }
-
-      console.log(`Updated roles for user: ${player.discord_id}`);
+      await member.roles.add(whitelistRole);
+      console.log(`Added Whitelist role to user: ${player.discord_id}`);
     } catch (error) {
       console.error(`Error updating roles for user ${player.discord_id}:`, error);
     }
@@ -411,13 +388,13 @@ client.on("interactionCreate", async (interaction) => {
       .setStyle(ButtonStyle.Primary);
 
     // Create the action row and add the buttons
-    const actionRow = new ActionRowBuilder().addComponents(
+    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       bullButton,
       bearButton
     );
 
     // Send the embed with the action row
-    await interaction.reply({ embeds: [embed], components: [actionRow] });
+    await interaction.reply({ embeds: [embed], components: [actionRow as any] });
   }
 
   if (interaction.commandName === "warstatus") {
@@ -483,7 +460,7 @@ client.on("interactionCreate", async (interaction) => {
         .setColor("#FFD700");
 
       for (const [index, entry] of leaderboardData.entries()) {
-        const user = await client.users.fetch(entry.discord_id);
+        const user = await client.users.fetch(entry.discord_id as string);
         const userMention = user ? `<@${user.id}>` : "Unknown User";
 
         leaderboardEmbed.addFields({
