@@ -461,6 +461,31 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   if (interaction.commandName === "team") {
+    // Check if the user has linked their account
+    const userId = interaction.user.id;
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("discord_id", userId)
+      .single();
+
+    if (userError || !userData) {
+      await interaction.reply({
+        content: "You need to link your account first. Please use the `/wankme` command to get started.",
+        ephemeral: true
+      });
+      return;
+    }
+
+    // If the user has already chosen a team, inform them
+    if (userData.team) {
+      await interaction.reply({
+        content: `You have already joined the ${userData.team} team. You cannot change your team.`,
+        ephemeral: true
+      });
+      return;
+    }
+
     // Create the embed
     const embed = new EmbedBuilder()
       .setTitle("Choose Your Team")
@@ -756,7 +781,16 @@ client.on("interactionCreate", async (interaction) => {
     const { data, error } = await supabase
       .from("users")
       .update({ team: "bullas" })
-      .eq("discord_id", member.user.id);
+      .eq("discord_id", interaction.user.id);
+
+    if (error) {
+      console.error("Error updating user team:", error);
+      await interaction.reply({
+        content: "An error occurred while joining the Bullas team. Please try again.",
+        ephemeral: true
+      });
+      return;
+    }
 
     await interaction.reply({
       content: "You have joined the Bullas team!",
@@ -777,7 +811,16 @@ client.on("interactionCreate", async (interaction) => {
     const { data, error } = await supabase
       .from("users")
       .update({ team: "beras" })
-      .eq("discord_id", member.user.id);
+      .eq("discord_id", interaction.user.id);
+
+    if (error) {
+      console.error("Error updating user team:", error);
+      await interaction.reply({
+        content: "An error occurred while joining the Beras team. Please try again.",
+        ephemeral: true
+      });
+      return;
+    }
 
     await interaction.reply({
       content: "You have joined the Beras team!",
