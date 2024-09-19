@@ -14,6 +14,7 @@ import {
   GuildMemberRoleManager,
   REST,
   Role,
+  RoleResolvable,
   Routes,
   SlashCommandBuilder,
 } from "discord.js";
@@ -68,7 +69,11 @@ const ADMIN_ROLE_IDS = [
 
 // Helper function to check if user has admin role
 function hasAdminRole(member: GuildMember | APIInteractionGuildMember | null) {
-  if (member && "roles" in member) {
+  if (
+    member &&
+    "roles" in member &&
+    member.roles instanceof GuildMemberRoleManager
+  ) {
     return member.roles.cache.some((role: Role) =>
       ADMIN_ROLE_IDS.includes(role.id)
     );
@@ -80,6 +85,7 @@ function hasAdminRole(member: GuildMember | APIInteractionGuildMember | null) {
 const WHITELIST_ROLE_ID = "1263470313300295751";
 const MOOLALIST_ROLE_ID = "1263470568536014870";
 const FREE_MINT_ROLE_ID = "1263470790314164325";
+const MOOTARD_ROLE_ID = "1281979123534925967";
 
 let WHITELIST_MINIMUM = 100; // Initial minimum, can be updated
 
@@ -160,24 +166,21 @@ async function updateRoles(guild: Guild) {
   console.log(`Updating roles for ${allPlayers.length} eligible players...`);
 
   for (const player of allPlayers) {
-    try {
-      const member = await guild.members.fetch({
-        user: player.discord_id,
-        force: true,
-      });
-      if (!member) {
-        console.log(`Member not found for Discord ID: ${player.discord_id}`);
-        continue;
+    if (player.discord_id) {
+      try {
+        const member = await guild.members.fetch(player.discord_id);
+        if (member) {
+          await member.roles.add(whitelistRole);
+          console.log(`Added Whitelist role to user: ${player.discord_id}`);
+        } else {
+          console.log(`Member not found for Discord ID: ${player.discord_id}`);
+        }
+      } catch (error) {
+        console.error(
+          `Error updating roles for user ${player.discord_id}:`,
+          error
+        );
       }
-
-      // Whitelist role
-      await member.roles.add(whitelistRole);
-      console.log(`Added Whitelist role to user: ${player.discord_id}`);
-    } catch (error) {
-      console.error(
-        `Error updating roles for user ${player.discord_id}:`,
-        error
-      );
     }
   }
 
@@ -471,8 +474,9 @@ client.on("interactionCreate", async (interaction) => {
 
     if (userError || !userData) {
       await interaction.reply({
-        content: "You need to link your account first. Please use the `/wankme` command to get started.",
-        ephemeral: true
+        content:
+          "You need to link your account first. Please use the `/wankme` command to get started.",
+        ephemeral: true,
       });
       return;
     }
@@ -481,7 +485,7 @@ client.on("interactionCreate", async (interaction) => {
     if (userData.team) {
       await interaction.reply({
         content: `You have already joined the ${userData.team} team. You cannot change your team.`,
-        ephemeral: true
+        ephemeral: true,
       });
       return;
     }
@@ -752,6 +756,93 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
+// Add this function to handle new member joins
+client.on("guildMemberAdd", async (member) => {
+  const mootardRole = member.guild.roles.cache.get(MOOTARD_ROLE_ID);
+  if (mootardRole) {
+    await member.roles.add(mootardRole);
+    console.log(`Added Mootard role to new member: ${member.user.tag}`);
+  }
+});
+
+// Modify the team selection logic in the button interaction handler
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isButton()) return;
+  if (!interaction.member || !interaction.guild) return;
+
+  const BULL_ROLE_ID = "1230207362145452103";
+  const BEAR_ROLE_ID = "1230207106896892006";
+  const member = interaction.member as GuildMember;
+  const roles = member.roles;
+
+  const bullRole = interaction.guild.roles.cache.get(BULL_ROLE_ID);
+  const bearRole = interaction.guild.roles.cache.get(BEAR_ROLE_ID);
+  const mootardRole = interaction.guild.roles.cache.get(MOOTARD_ROLE_ID);
+
+  if (bearRole || !bullRole || !mootardRole) return;
+
+  async function removeRolesAndAddTeam(teamRole: Role, teamName: string) {
+    // Remove the Mootard role
+    if (roles.cache.has(MOOTARD_ROLE_ID)) {
+      await roles.remove(mootardRole as RoleResolvable);
+    }
+
+    // Remove the opposite team role if present
+    const oppositeRoleId =
+      teamRole.id === BULL_ROLE_ID ? BEAR_ROLE_ID : BULL_ROLE_ID;
+    if (roles.cache.has(oppositeRoleId)) {
+      await roles.remove(oppositeRoleId === BULL_ROLE_ID ? bullRole : bearRole);
+    }
+
+    // Add the new team role
+    await roles.add(teamRole);
+
+    // Update the user's team in the database
+    const { error } = await supabase
+      .from("users")
+      .update({ team: teamName })
+      .eq("discord_id", interaction.user.id);
+
+    if (error) {
+      console.error(`Error updating user team to ${teamName}:`, error);
+      if (interaction.isRepliable()) {
+        await interaction.reply({
+          content: `An error occurred while joining the ${teamName} team. Please try again.`,
+          ephemeral: true,
+        });
+      }
+      return false;
+    }
+
+    return true;
+  }
+
+  if (interaction.customId === "bullButton") {
+    if (await removeRolesAndAddTeam(bullRole, "bullas")) {
+      if (interaction.isRepliable()) {
+        await interaction.reply({
+          content: "You have joined the Bullas team!",
+          ephemeral: true,
+        });
+      }
+    }
+  } else if (interaction.customId === "bearButton") {
+    if (await removeRolesAndAddTeam(bearRole, "beras")) {
+      if (interaction.isRepliable()) {
+        await interaction.reply({
+          content: "You have joined the Beras team!",
+          ephemeral: true,
+        });
+      }
+    }
+  }
+
+  // Delete the original message
+  if (interaction.message) {
+    await interaction.message.delete();
+  }
+});
+
 // Handle button interactions
 client.on("interactionCreate", async (interaction) => {
   // Replace 'BULL_ROLE_ID' and 'BEAR_ROLE_ID' with the actual role IDs
@@ -786,8 +877,9 @@ client.on("interactionCreate", async (interaction) => {
     if (error) {
       console.error("Error updating user team:", error);
       await interaction.reply({
-        content: "An error occurred while joining the Bullas team. Please try again.",
-        ephemeral: true
+        content:
+          "An error occurred while joining the Bullas team. Please try again.",
+        ephemeral: true,
       });
       return;
     }
@@ -816,8 +908,9 @@ client.on("interactionCreate", async (interaction) => {
     if (error) {
       console.error("Error updating user team:", error);
       await interaction.reply({
-        content: "An error occurred while joining the Beras team. Please try again.",
-        ephemeral: true
+        content:
+          "An error occurred while joining the Beras team. Please try again.",
+        ephemeral: true,
       });
       return;
     }
